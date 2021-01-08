@@ -40,11 +40,12 @@ class Database(object):
             self._date = date
             self._kldata = defaultdict(KookLijst)
 
-    def _check_group(self, chat, update):
+    def _check_group(self, update: Update, context: CallbackContext):
+        chat = update.effective_chat
         if hasattr(chat, "type") and chat.type == "group": 
             return False
         else:
-            update.message.reply_text("Voeg me toe aan een groep!")
+            context.bot.send_message(chat_id=update.effective_chat.id, text="Voeg me toe aan een groep!")
             return True
 
     def add_chef(self, date, chat_id, user):
@@ -58,7 +59,7 @@ class Database(object):
 
     def kook(self, update: Update, context: CallbackContext) -> None:
 
-        if self._check_group(update.effective_chat, update):
+        if self._check_group(update, context):
             return
 
         date = update.effective_message.date.date()
@@ -77,7 +78,6 @@ class Database(object):
         ])
         update.message.reply_text('Ik eet', reply_markup=reply_markup)
 
-
     def button(self, update: Update, context: CallbackContext) -> None:
         query = update.callback_query
         query.answer()
@@ -95,26 +95,25 @@ class Database(object):
         elif query.data == "3":
             self.add_guest(date, chat_id, user, 2)
 
-
     def eet(self, update: Update, context: CallbackContext) -> None:
-        if self._check_group(update.effective_chat, update):
+        if self._check_group(update, context):
             return
         date = update.effective_message.date.date()
         self.add_guest(date, update.effective_chat.id, update.effective_user)
 
     def eetplus(self, update: Update, context: CallbackContext) -> None:
-        if self._check_group(update.effective_chat, update):
+        if self._check_group(update, context):
             return
         date = update.effective_message.date.date()
         self.add_guest(date, update.effective_chat.id, update.effective_user, int(context.args[0]))
     
     def eetniet(self, update: Update, context: CallbackContext) -> None:
-        if self._check_group(update.effective_chat, update):
+        if self._check_group(update, context):
             return
         self._kldata[update.effective_chat.id].guests.pop(update.effective_user.id, None)
 
     def wie(self, update: Update, context: CallbackContext, attribute="first_name") -> None:
-        if self._check_group(update.effective_chat, update):
+        if self._check_group(update, context):
             return
         self._check_date(datetime.date.today())
         chat_id = update.effective_chat.id
@@ -127,13 +126,13 @@ class Database(object):
             guests += getattr(user, "guests", 0)
 
         message = f"{chefname} kookt,\n" + ", ".join(names) + f" en {guests} gasten eten mee."
-        update.message.reply_text(message)
+        context.bot.send_message(chat_id=update.effective_chat.id, text=message)
 
     def wielang(self, update: Update, context: CallbackContext) -> None:
         self.wie(update, context, "full_name")
 
     def hoeveel(self, update: Update, context: CallbackContext) -> None:
-        if self._check_group(update.effective_chat, update):
+        if self._check_group(update, context):
             return
         self._check_date(datetime.date.today())
         chat_id = update.effective_chat.id
@@ -141,26 +140,26 @@ class Database(object):
         for key, user in self._kldata[chat_id].guests.items():
             guests += 1 + getattr(user, "guests", 0)
         message = f"{guests} mensen eten mee."
-        update.message.reply_text(message)
+        context.bot.send_message(chat_id=update.effective_chat.id, text=message)
 
     def reset(self, update: Update, context: CallbackContext) -> None:
-        if self._check_group(update.effective_chat, update):
+        if self._check_group(update, context):
             return
         self._check_date(datetime.date.today())
         chat_id = update.effective_chat.id
         self._kldata.pop(chat_id, None)
-        update.message.reply_text("Eetlijst gewist")
-
-    def start(self, update: Update, context: CallbackContext) -> None:
-        message = "Hallo, dit is een bot voor het bijhouden van een eetlijst. Na 24 uur worden alle eetlijsten uit de database verwijderd. Voeg me toe aan een groep om van me gebruik te maken. Zie /help voor een lijst van commando's."
-        update.message.reply_text(message)
-
-    def help(self, update: Update, context: CallbackContext) -> None:
-        message = "/kook als je kookt\n/eet als je mee-eet\n/eetplus het aantal gasten\n/eetniet als je niet mee-eet\n/wie lijst met mee-eters\n/wielang hele namen van mee-eters\n/hoeveel aantal mee-eters\n/reset wis eetlijst"
-        update.message.reply_text(message)
+        context.bot.send_message(chat_id=update.effective_chat.id, text="Eetlijst gewist.")
 
 
-def unknown(update, context):
+def start(update: Update, context: CallbackContext) -> None:
+    message = "Hallo, dit is een bot voor het bijhouden van een eetlijst. Na 24 uur worden alle eetlijsten uit de database verwijderd. Voeg me toe aan een groep om van me gebruik te maken. Zie /help voor een lijst van commando's."
+    context.bot.send_message(chat_id=update.effective_chat.id, text=message)
+
+def helper(update: Update, context: CallbackContext) -> None:
+    message = "/kook als je kookt\n/eet als je mee-eet\n/eetplus het aantal gasten\n/eetniet als je niet mee-eet\n/wie lijst met mee-eters\n/wielang hele namen van mee-eters\n/hoeveel aantal mee-eters\n/reset wis eetlijst"
+    context.bot.send_message(chat_id=update.effective_chat.id, text=message)
+
+def unknown(update: Update, context: CallbackContext) -> None:
     context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, I didn't understand that command.")
 
 def main():
@@ -173,7 +172,8 @@ def main():
 
     database = Database()
 
-    dispatcher.add_handler(CommandHandler('start', database.start))
+    dispatcher.add_handler(CommandHandler('start', start))
+    dispatcher.add_handler(CommandHandler('help', helper))
     dispatcher.add_handler(CommandHandler('kook', database.kook))
     dispatcher.add_handler(CommandHandler('eet', database.eet))
     dispatcher.add_handler(CommandHandler('eetplus', database.eetplus))
@@ -182,14 +182,11 @@ def main():
     dispatcher.add_handler(CommandHandler('wielang', database.wielang))
     dispatcher.add_handler(CommandHandler('hoeveel', database.hoeveel))
     dispatcher.add_handler(CommandHandler('reset', database.reset))
-    dispatcher.add_handler(CommandHandler('help', database.help))
     dispatcher.add_handler(CallbackQueryHandler(database.button))
     dispatcher.add_handler(MessageHandler(Filters.command, unknown))
 
-
     updater.start_polling()
     updater.idle()
-
 
 if __name__ == '__main__':
     main()
